@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title> Lab 4 - Filtering </title>
+
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+  <style>
+    body         {
+      padding-top: 20px;
+      background-color: #212831;
+      color: white;
+      font-family: sans-serif;
+    }
+  g            { stroke: white; }
+  g path       { stroke: white }
+  .tick line   { stroke: #fff; }
+  circle       { opacity: .5; }
+  .legend text {
+    fill: white;
+    font-family: sans-serif;
+    font-size: 8pt;
+  }
+  #filters   {
+    float: left;
+    font-size: 9pt;
+    margin-top: 20px;
+  }
+  .continuous-filter     { width: 280px; }
+  .title, .slider{
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+  .title  {line-height: 20pt;}
+  .slider       { width: 200px; }
+  .slider-value {color: #76cdea;}
+  .categorical-filter {
+    margin-top: 20px;
+    display: flex;
+  }
+  .categorical-filter div{
+    margin-right: 10px;
+  }
+  </style>
+
+</head>
+<body>
+
+<div id="filters">
+
+  <div class="continuous-filter" id="price-filter">
+    <span class="title">Price</span> <span class="slider-value"></span>
+    <div id="price-range" class="slider"></div>
+  </div>
+
+  <div id="cut-filter" class="categorical-filter">
+    <div class="title"><p>Cut</p></div>
+    <div>
+    <input id ="Fair" type="checkbox" checked name="cut" value="Fair"><label>Fair</label><br>
+    <input id ="Good"type="checkbox" checked name="cut" value="Good"><label>Good</label><br>
+    <input id ="Very Good"type="checkbox" checked name="cut" value="Very Good"><label>Very Good</label><br>
+    <input id ="Premium"type="checkbox" checked name="cut" value="Premium"><label>Premium</label><br>
+    <input id ="Ideal"type="checkbox" checked name="cut" value="Ideal"><label>Ideal</label><br>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.4/d3-legend.js"></script>
+
+<script>
+
+
+
+
+// The data looks like this
+//
+// > data[0]
+// Object {"carat":"0.23","cut":"Ideal","color":"E",
+//         "clarity":"SI2","depth":"61.5","table":"55",
+//         "price":"326","x":"3.95","y":"3.98","z":"2.43"}
+//
+// > data.map((d)=>d.price)
+// ["326", "326", "327", "334", "335", "336",...]
+
+var oriData = null;
+var data = null;
+var minPrice, maxPrice;
+var cutArray = ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal'];
+cutArray[0]=true;
+cutArray[1]=true;
+cutArray[2]=true;
+cutArray[3]=true;
+cutArray[4]=true;
+
+d3.csv("diamonds.tsv", function(records){
+  oriData = records.filter((d,i) => i % 100 ==0);
+  data = oriData;
+  // create and configure range slider for price
+  $("#price-range").slider({
+        range: true,
+        min: 0,
+        max: 10000,
+        values: [ 75, 10000 ],
+        slide: function( event, ui ) {
+          var newMin = ui.values[0],
+              newMax = ui.values[1];
+
+          // update slider label
+          d3.select("#price-filter .slider-value")
+            .text("$" + newMin + " - $" + newMax);
+
+          // 1. filter data based on newMin and newMax
+          //console.log(data);
+          data = oriData.filter(d => +d.price >= newMin &&
+                                     +d.price <=newMax
+          );
+          // 2. update display
+          //console.log(data);
+          //console.log(newMin);
+          display();
+
+        },
+        create: function(event, ui){
+          // set slider label
+          d3.select("#price-filter .slider-value")
+            .text("$" + 75 + " - $" + 10000);
+        }
+      });
+
+  d3.select('#cut-filter')
+    .selectAll('input')
+    .on('change', function(){
+      // print value and whether or not it is checked
+      console.log(d3.select(this).node().value +
+        ": " +
+        d3.select(this).node().checked);
+
+      // 1. filter data based on new selections
+      function filteredCut(d){
+        if(document.getElementById("Fair").checked == true)
+          return d.cut == "Fair"
+        else if(document.getElementById("Good").checked == true)
+          return d.cut == "Good"
+        else if(document.getElementById("Very Good").checked == true)
+          return d.cut == "Very Good"
+        else if(document.getElementById("Premium").checked == true)
+          return d.cut == "Premium"
+        else if(document.getElementById("Ideal").checked == true)
+          return d.cut == "Ideal"
+      }
+      console.log("In Cut filter" + data);
+      data = data.filter(filteredCut);
+      // 2. update display
+      console.log(data);
+      display();
+    });
+
+  display();
+}); // end of csv
+
+function display(){
+  var circles = d3.select('body')
+      .append('svg')
+      .attr('width', 800)
+      .attr('height', 400)
+      .selectAll('circle')
+      .data(data)
+      .enter()
+      .append('circle');
+
+
+  var xScale =  d3.scaleLog()
+     .domain(d3.extent(data, function(d){return +d.carat}))
+     .range([50, 1000]);
+
+  var yScale = d3.scaleLog()
+     .domain(d3.extent(data, function(d){return +d.price}))
+     .range([300,0]);
+
+  var colorScale = d3.scaleOrdinal()
+    .domain(["Fair", "Good", "Very Good", "Premium", "Ideal"])
+    .range(["#E67838", "#DB9B19", "#BDBE18", "#8DDD4B", "#23F990"]);
+
+  circles.attr('cx', (d) => xScale(+d.carat))
+         .attr('cy', (d) => yScale(+d.price))
+         .attr('r', 1)
+         .attr('fill', (d) => colorScale(d.cut));
+
+  //cirles.exit().remove();
+
+  let xAxis = d3.axisBottom(xScale)
+    .tickFormat(d3.format('.1f'));
+    d3.select('svg')
+      .append("g")
+      .attr("transform", "translate(0,310)")
+      .call(xAxis);
+
+  let yAxis = d3.axisLeft(yScale)
+    .tickFormat(d3.format(',d'));
+  d3.select('svg')
+      .append("g")
+      .attr("transform", "translate(40,0)")
+      .call(yAxis);
+
+  var legendColor = d3.legendColor()
+    .shapeWidth(30)
+    .title("Cut")
+    .orient('vertical')
+    .scale(colorScale);
+
+  d3.select("svg")
+    .append("g")
+    .attr("class", "legend")
+    .attr("transform", "translate(50,20)")
+    .call(legendColor);
+}
+
+</script>
+
+</body>
+</html>
